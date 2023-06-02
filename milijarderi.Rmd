@@ -1,0 +1,808 @@
+---
+title: "SAP projekt Milijarder"
+author: "Iris Jukić Šućur, Marija Kompar, Ana Skukan, Branimir Stanković"
+date: '2022-12-16'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Uvod i motivacija
+
+Milijarderi trenutno čine manje od 1% svjetske populacije. Ekonomski jaz između siromašnih i bogatih je sve veći te uočavamo trend nestajanja srednje ekonomske klase. Cilj ove analize je dobiti što veći uvid u bogatstvo najbogatijih sa Forbesove liste od 1994.do 2014. godine. Motivacija za ovakvu analizu je nastojanje da se stvori šansa za oslabljivanje trenda akumulacije sve veće količine bogatstva kod sve manjeg broja ljudi.
+
+# Deskriptivna analiza
+
+### **Učitajmo potrebne pakete**
+
+```{r echo=T, error=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+```
+
+### **Učitajmo podatke**
+
+```{r}
+billionaires=read.csv("billionaires.csv",header=T,na.strings=c("","NA"))
+dim(billionaires)
+```
+
+Podaci se sastoje od 2614 kompanija i 22 njihova opisa. Neki od tih opisa su: ime milijardera, ime kompanije, dob, spol, državljanstvo, porijeklo bogatstva, struka itd. Istaknimo da se neka imena osnivača kompanija ponavljaju stoga nema 2614 milijardera, nego je toliko kompanija vrijednih milijarde. Doduše takvih slučajeva je zanemariv broj pa ćemo ih tretirati kao zasebne slučajeve usprkos tome što se odnose na istu osobu.
+
+```{r}
+names(billionaires)
+```
+
+Kompanije su opisane kvalitativnim i kvantitativnim varijablama ili opisima. U ovoj analizi ćemo koristiti samo neke od njih te promatrati njihovo ponašanje. Varijable koje nam nisu korisne za analizu ćemo izbaciti iz skupa podataka. Neki od razloga su redundancija podataka u slučajevima gdje dvije varijable opisuju gotovo istu karakteristiku kao što je to slučaj sa državom i regijom u kojoj živi milijarder. Promatrat ćemo koncentraciju milijardera po geografskim regijama jer bi analiza po zasebnim državama bila previše detaljna, a opisivala bi istu problematiku. Drugi mogući razlog izbacivanja varijabli je nepotrebnost za našu analizu, primjer takve varijable je kod države u kojoj živi milijarder.
+
+### **Izbacivanje nepotrebnih varijabli**
+
+```{r}
+billionaires = select(billionaires, -c("demographics.gender","location.citizenship","location.country.code","wealth.how.was.political"))
+dim(billionaires)
+```
+
+### **Karakteristike varijabli**
+
+```{r}
+summary(billionaires)
+
+```
+
+Sada kada smo upoznati sa karakteristikama varijabli, provjerimo koliko varijabli nedostaje. Odmah primjećujemo da je minimalna vrijednost varijable Godina osnivanja kompanije 0, što znači da ćemo iz baze podataka morati ukloniti sve one milijardere s takvom karakteristikom. Isti slučaj imamo i po pitanju varijable koja opisuje BDP-a država čiji su stanovnici navedeni milijarderi. Također, primjećujemo da je minimalna vrijednosti varijable koja opisuje dob milijardera negativna vrijednost.
+
+### **Koliko varijabli nedostaje?**
+
+```{r}
+for (col_name in names(billionaires)){
+  if (sum(is.na(billionaires[,col_name])) >= 0){
+    cat('Ukupno nedostajućih vrijednosti za varijablu ',col_name, ': ', sum(is.na(billionaires[,col_name])),'\n')
+  }
+}
+
+
+for (col_name in names(billionaires)){
+  if (sum(is.na(billionaires[,col_name])) >= 0){
+    message("Ukupno vrijednosti 0 za varijablu ",col_name, ' je: ',length(which(billionaires[,col_name]==0)))
+  }
+}
+
+```
+
+Vidimo da nam nedostaje relativno malen broj vrijednosti kod nekih varijabli što smatramo zanemarivim u odnosu na dimenzije uzorka. U slučaju varijable koja opisuje BDP-a država u kojima žive milijarderi ne možemo zanemariti broj nedostajućih vrijednosti te nećemo koristiti ovu varijablu u daljnjoj analizi. Također primjećujemo da i varijabla koja opisuje dob milijardera ima značajan broj nedostajućih vrijednosti, a k tome i neispravnih (negativnih) vrijednosti kao što smo uočili ranije. Ova varijabla nam je potrebna za daljnju analizu stoga ćemo kada nam bude potrebna koristiti modificirani set podataka iz kojeg će biti izbačeni takvi mlijarderi kojima je dob neispravno upisana ili nije uopće upisana. Razlog zašto nećemo odmah izbaciti te milijardere iz seta podataka je to što bismo time izgubili podatke o 385 milijardera iz uzorka, a za to nema potrebe budući da im ne nedostaju vrijednosti ostalih varijabli.
+
+```{r, fig.width = 15, fig.height=15}
+billionaires_adapt_age=billionaires[!(billionaires$demographics.age<=0),]
+billionaires_adapt_funded=billionaires[!(billionaires$company.founded==0),]
+```
+
+### **Analiza numeričkih varijabli**
+
+Promotrimo neke od varijabli nad kojima ćemo kasnije provesti analizu.
+
+```{r}
+#dob milijardera
+hist(billionaires_adapt_age$demographics.age,main='Histogram dobi milijardera',xlab='Dob',ylab='Frekvencija', breaks=20)
+boxplot(billionaires_adapt_age$demographics.age,name=c('Dob'),main='Boxplot dobi milijardera')
+test.billionaires_adapt_age <- billionaires_adapt_age$demographics.age
+qqnorm(test.billionaires_adapt_age, main="Dob milijardera")
+qqline(test.billionaires_adapt_age,col="red",lwd=2)
+require(nortest)
+lillie.test(test.billionaires_adapt_age)
+
+#godina osnutka kompanije
+hist(billionaires_adapt_funded$company.founded,main='The year that the company was founded',xlab='Year',ylab='Frekvencija', breaks=20)
+boxplot(billionaires_adapt_funded$company.founded,name=c('Godina'),main='Boxplot godine osnutka kompanije')
+
+#iznos bogatstva u milijardama dolara
+hist(billionaires$wealth.worth.in.billions,main='Iznos bogatstva u milijardama dolara',xlab='Bogatstvo',ylab='Frekvencija', breaks=20)
+
+boxplot(billionaires$wealth.worth.in.billions,name=c('Iznos bogatstva'),main='Boxplot iznosa mlijiardi')
+test.billionaires<- billionaires$wealth.worth.in.billions
+qqnorm(test.billionaires, main="Iznos bogatstva")
+qqline(test.billionaires,col="red",lwd=2)
+```
+
+Varijabla dobi milijardera većinski prati normalnu razdiobu što je uočljivo i iz histograma i iz qq plotova iako su malo preveliki repovi. Lilliefors test pokazuje da distribucija nije normalna sa statističkom značajnošću, no dovoljno je blizu da nam bude prihvatljivo za daljnju analizu. Godina osnutka kompanije ne prati normalnu razdiobu niti neku drugu nama poznatu razdiobu. Ovu varijablu nećemo koristiti u daljnoj analizi. Iznos bogatstva također ne prati nama poznate razdiobe.
+
+### **Analiza kategoričkih varijabli**
+
+Promotrimo kategoričke varijable *company.relationship,company.sector, location.region, wealth.how.inherited*. Ove varijable ćemo koristiti u daljnjoj analizi.
+
+```{r,  fig.width = 14, fig.height=5}
+barplot(table(billionaires$company.relationship),las=2,cex.names=.5,main='Position in the company')
+barplot(table(billionaires$wealth.how.industry),las=2,cex.names=.5,main='Industry')
+barplot(table(billionaires$location.region),las=2,main='Region')
+print('Was it inherited: ')
+table(billionaires$wealth.how.inherited)
+```
+
+# Ima li neki kontinent statistički značajno više milijardera?
+
+### Sređivanje podataka
+
+Pogledajmo koje su regije definirane u tablici podataka.
+
+```{r}
+regions = unique(unlist(apply(billionaires[c("location.region")], 1, function(x) strsplit(x, "\\|"))))
+regions
+
+```
+
+Regije koje se ispisuju su Bliski Istok / Sjeverna Afrika, Europa, Istočna Azija, Južna Azija, Latinska Amerika,
+
+Sjeverna Amerika i Subsaharska Afrika. Također je, zbog greške u podacima, definirana regija imenom "0", ali smo iz konteksta (ime države), shvatili da te države pripadaju regiji Sjeverne Amerike.
+
+```{r}
+East_Asia = billionaires[billionaires$location.region == "East Asia",]
+Europe = billionaires[billionaires$location.region == "Europe",]
+Latin_America = billionaires[billionaires$location.region == "Latin America",]
+Middle_East_North_Africa = billionaires[billionaires$location.region == "Middle East/North Africa",]
+North_America = billionaires[billionaires$location.region == "North America"|  billionaires$location.region == "0",]
+South_Asia = billionaires[billionaires$location.region == "South Asia",]
+Sub_Saharan_Africa = billionaires[billionaires$location.region == "Sub-Saharan Africa",]
+```
+
+Pogledajmo boxplot bogatstva svake regije.
+
+```{r}
+boxplot(East_Asia$wealth.worth.in.billions, Europe$wealth.worth.in.billions, 
+        Latin_America$wealth.worth.in.billions, 
+        Middle_East_North_Africa$wealth.worth.in.billions, 
+        North_America$wealth.worth.in.billions, 
+        South_Asia$wealth.worth.in.billions, 
+        Sub_Saharan_Africa$wealth.worth.in.billions,
+        names = c('E. Asia', 'Europe', 'Latin A.', 'M.E./N.A.', 'N.Amr.', 'S. Asia', 'S.S. Africa'),
+        main='Boxplot of different regions')
+
+```
+
+Budući da je na 'nenaštimanom' boxplot grafu teško vidjeti kvartile pojedinih regija i mnoge regije imaju puno outliera, aritmetičke sredine ovakvih podataka nisu dovoljno vjerodostojne i bolja mjera za sredinu u ovoj situaciji bila bi medijan. Budući da moramo provesti test o jednakosti srednjih vijednosti prikazanih regija, cilj je za svaku regiju pretpostaviti normalnost razdiobe, zbog čega smo odlučili napisali funkciju za izbacivanje outliera i ograničili podatke pojedinih regija koji uzrokuju nestabilnost za mjere poput srednje vrijednosti i standardne devijacije.
+
+Već možemo pretpostaviti da je glavni kandidat za "najbogatiju" regiju Sjeverna Amerika.
+
+```{r}
+remove_outliers <- function(x, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE, ...)
+  H <- 1.5 * IQR(x, na.rm = TRUE)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  y
+}
+East_Asia$wealth.worth.in.billions = remove_outliers(East_Asia$wealth.worth.in.billions)
+Europe$wealth.worth.in.billions = remove_outliers(Europe$wealth.worth.in.billions)
+Latin_America$wealth.worth.in.billions = remove_outliers(Latin_America$wealth.worth.in.billions)
+Middle_East_North_Africa$wealth.worth.in.billions = remove_outliers(Middle_East_North_Africa$wealth.worth.in.billions)
+North_America$wealth.worth.in.billions = remove_outliers(North_America$wealth.worth.in.billions)
+South_Asia$wealth.worth.in.billions = remove_outliers(South_Asia$wealth.worth.in.billions)
+Sub_Saharan_Africa$wealth.worth.in.billions = remove_outliers(Sub_Saharan_Africa$wealth.worth.in.billions)
+
+boxplot(East_Asia$wealth.worth.in.billions, Europe$wealth.worth.in.billions, 
+        Latin_America$wealth.worth.in.billions, 
+        Middle_East_North_Africa$wealth.worth.in.billions, 
+        North_America$wealth.worth.in.billions, 
+        South_Asia$wealth.worth.in.billions, 
+        Sub_Saharan_Africa$wealth.worth.in.billions,
+        names = c('EA', 'E', 'LA', 'MENA', 'NA','SA', 'SSA'),
+        main='Boxplot of different regions')
+```
+
+### Grafički prikaz
+
+Pogledajmo histograme i Q-Q plotove bogatstva pojedinih regija.
+
+```{r}
+hist(East_Asia$wealth.worth.in.billions, main = "East Asia", xlab='Wealth worth in billions')
+qqnorm(East_Asia$wealth.worth.in.billions, pch = 1, frame = FALSE,main='East Asia')
+qqline(East_Asia$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+
+```
+
+```{r}
+hist(Europe$wealth.worth.in.billions, main = "Europe", xlab='Wealth worth in billions')
+qqnorm(Europe$wealth.worth.in.billions, pch = 1, frame = FALSE,main='Europe')
+qqline(Europe$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+
+```
+
+```{r}
+hist(Latin_America$wealth.worth.in.billions, main = "Latin America", xlab='Wealth worth in billions')
+qqnorm(Latin_America$wealth.worth.in.billions, pch = 1, frame = FALSE,main='Latin America')
+qqline(Latin_America$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+```
+
+```{r}
+hist(Middle_East_North_Africa$wealth.worth.in.billions, main = "Middle East/North Africa", xlab='Wealth worth in billions')
+qqnorm(Middle_East_North_Africa$wealth.worth.in.billions, pch = 1, frame = FALSE,main='Middle East/North Africa')
+qqline(Middle_East_North_Africa$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+```
+
+```{r}
+hist(South_Asia$wealth.worth.in.billions, main = "South Asia", xlab='Wealth worth in billions')
+qqnorm(South_Asia$wealth.worth.in.billions, pch = 1, frame = FALSE,main='South Asia')
+qqline(South_Asia$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+```
+
+```{r}
+hist(Sub_Saharan_Africa$wealth.worth.in.billions, main = "Sub-Saharan Africa", xlab='Wealth worth in billions')
+qqnorm(Sub_Saharan_Africa$wealth.worth.in.billions, pch = 1, frame = FALSE,main='Sub-Saharan Africa')
+qqline(Sub_Saharan_Africa$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+```
+
+### Varijance podataka
+
+Probajmo sada dobiti varijancu podataka.
+
+```{r}
+var(East_Asia$wealth.worth.in.billions)
+```
+
+Budući da u tablici za atribut "wealth worth in billions" postoji podataka koji su NA, potrebno ih je izbaciti da možemo pravilno izračunati varijancu.
+
+```{r}
+East_Asia <- na.omit(East_Asia, "wealth.worth.in.billions")
+var(East_Asia$wealth.worth.in.billions)
+```
+
+Uspješno smo izbacili nedefinirane vrijednosti bogatstva u milijardama. Napravimo to za ostale regije i izračunajmo njihovu varijancu.
+
+```{r}
+Europe <- na.omit(Europe, "wealth.worth.in.billions")
+var(Europe$wealth.worth.in.billions)
+
+Latin_America <- na.omit(Latin_America, "wealth.worth.in.billions")
+var(Latin_America$wealth.worth.in.billions)
+
+Middle_East_North_Africa <- na.omit(Middle_East_North_Africa, "wealth.worth.in.billions")
+var(Middle_East_North_Africa$wealth.worth.in.billions)
+
+North_America <- na.omit(North_America, "wealth.worth.in.billions")
+var(North_America$wealth.worth.in.billions)
+
+South_Asia <- na.omit(South_Asia, "wealth.worth.in.billions")
+var(South_Asia$wealth.worth.in.billions)
+
+Sub_Saharan_Africa <- na.omit(Sub_Saharan_Africa, "wealth.worth.in.billions")
+var(Sub_Saharan_Africa$wealth.worth.in.billions)
+```
+
+Izgled grafova pobuđuje sumnju u normalnost razdiobe, zbog čega smo odlučili provesti test pretpostavke normalnosti Lillieforceovom inačicom KS testa.
+
+Nulta hipoteza u testu je da je razdioba normalna.
+
+```{r}
+require(nortest)
+lillie.test(billionaires$wealth.worth.in.billions)
+
+lillie.test(East_Asia$wealth.worth.in.billions)
+lillie.test(Europe$wealth.worth.in.billions)
+lillie.test(Latin_America$wealth.worth.in.billions)
+lillie.test(Middle_East_North_Africa$wealth.worth.in.billions)
+lillie.test(North_America$wealth.worth.in.billions)
+lillie.test(South_Asia$wealth.worth.in.billions)
+lillie.test(Sub_Saharan_Africa$wealth.worth.in.billions)
+
+```
+
+Evidentno je da je p-vrijednost u većini razdioba vrlo mala, zbog čega odbacujemo nultu hipotezu i, sukladno našim previđanjima, zaključujemo da razdiobe nisu normalne.
+
+Provest ćemo i testiranje homogenosti varijanci, a to ćemo postići Bartlettovim testom.
+
+```{r}
+East_Asia$regions = 'East Asia'
+Europe$regions = 'Europe'
+Latin_America$regions = 'Latin America'
+Middle_East_North_Africa$regions = 'Middle East / North Africa'
+North_America$regions = 'North America'
+South_Asia$regions = 'South Asia'
+Sub_Saharan_Africa$regions = 'Sub-Saharan Africa'
+
+anovaDS = East_Asia
+anovaDS = rbind(Europe, anovaDS)
+anovaDS = rbind(Latin_America, anovaDS)
+anovaDS = rbind(Middle_East_North_Africa, anovaDS)
+anovaDS = rbind(North_America, anovaDS)
+anovaDS = rbind(South_Asia, anovaDS)
+anovaDS = rbind(Sub_Saharan_Africa, anovaDS)
+```
+
+### Bartlettov test:
+
+```{r}
+bartlett.test(anovaDS$wealth.worth.in.billions ~ anovaDS$regions)
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='East Asia']))
+
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='Europe']))
+
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='Latin America']))
+
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='Middle East / North Africa']))
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='North America']))
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='South Asia']))
+```
+
+```{r}
+var((anovaDS$wealth.worth.in.billions[anovaDS$regions=='Sub-Saharan Africa']))
+```
+
+```{r}
+boxplot(anovaDS$wealth.worth.in.billions ~ anovaDS$regions)
+
+```
+
+```{r}
+a = aov(anovaDS$wealth.worth.in.billions ~ anovaDS$regions)
+summary(a)
+
+```
+
+Zbog vrlo male p-vrijednosti, ne možemo provesti ANOVA test, pa iz tog razloga koristimo slabiju alternativu, Kruskal-Walis test.
+
+H0: regije (njihove srednje vrijednosti) se ne razlikuju H1: regije (njihove srednje vrijednosti) se razlikuju
+
+```{r}
+kruskal.test(anovaDS$wealth.worth.in.billions ~ anovaDS$regions)
+```
+
+Ovdje nam vrlo mala p-vrijednost ukazuje na to da su razlike srednjih vrijednosti bogatstva pojedinih regija značajne.
+
+Nakon provedenih testiranja možemo zaključiti da postoje regije sa statistički značajno bogatijim milijarderima, a među njima izdvajamo Sjevernu Ameriku koja je, sjetimo se, imala velik broj outliera iznad maksimalnog gorenjeg izdanka, čije je bogatstvo jednostavno neusporedivo.
+
+# Jesu li milijarderi koji su nasljedili bogastvo statistički značajno bogatiji od onih koji nisu?
+
+### Sređivanje podataka
+
+Dalje dovodimo u pitanje ulogu nasljedstva u bogatstvu naših milijardera. Razdvojimo prvo one koji jesu i one koji nisu naslijedili bogatstvo.
+
+```{r}
+inherited_billionaire = billionaires[billionaires$wealth.type == "inherited",]
+non_inherited_billionaire = billionaires[billionaires$wealth.type != "inherited",]
+
+```
+
+Pogledajmo srednje vrijednosti bogatstva novih skupova podataka, no prvo izbacimo one kojima atribut "wealth worth in billions" nije definiran.
+
+```{r}
+inherited_billionaire <- na.omit(inherited_billionaire, "wealth.worth.in.billions")
+non_inherited_billionaire <- na.omit(non_inherited_billionaire, "wealth.worth.in.billions")
+cat('Prosjek nasljeđenog bogatstva ', mean(inherited_billionaire$wealth.worth.in.billions),'\n')
+cat('Prosjek nenasljeđenog bogatstva ', mean(non_inherited_billionaire$wealth.worth.in.billions), '\n')
+```
+
+Podaci nam zasad izgledaju slično, no potrebno je uzeti u obzir i druge parametre te provesti testiranje njihovih (ne)/jednakosti. Pogledajmo boxplot-ove, histograme i Q-Q plotove ova dva skupa podataka. \### Prikaz podataka
+
+```{r}
+boxplot(inherited_billionaire$wealth.worth.in.billions, x = non_inherited_billionaire$wealth.worth.in.billions,
+        names = c('inherited billionaires','non inherited billionaires'),
+        main='Boxplot of inherited and non inherited billionaires')
+```
+
+```{r}
+hist(inherited_billionaire$wealth.worth.in.billions, 
+     breaks=seq(min(inherited_billionaire$wealth.worth.in.billions),max(inherited_billionaire$wealth.worth.in.billions),3),
+     main='Histogram of wealth of inherited billionaires',
+     xlab='Wealth worth in billions')
+
+hist(non_inherited_billionaire$wealth.worth.in.billions, 
+     breaks=seq(min(non_inherited_billionaire$wealth.worth.in.billions),max(non_inherited_billionaire$wealth.worth.in.billions),3),
+     main='Histogram of wealth of non inherited billionaires',
+     xlab='Wealth worth in billions')
+```
+
+```{r}
+qqnorm(inherited_billionaire$wealth.worth.in.billions, pch = 1, frame = FALSE,main='inherited billionaires')
+qqline(inherited_billionaire$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+
+qqnorm(non_inherited_billionaire$wealth.worth.in.billions, pch = 1, frame = FALSE,main='non inherited billionaires')
+qqline(non_inherited_billionaire$wealth.worth.in.billions, col = "steelblue", lwd = 2)
+```
+
+### Varijance podataka
+
+```{r}
+var(inherited_billionaire$wealth.worth.in.billions)
+var(non_inherited_billionaire$wealth.worth.in.billions)
+```
+
+### Testiranje
+
+Budući da pokušavamo odgovoriti na pitanje jesu li milijarderi koji su naslijedili bogatstvo statistički značajno bogatiji od onih koji nisu, potrebno je provesti t-test jednakosti srednjih vrijednosti, u kojemu je nulta hipoteza da su srednje vrijednosti jednake, a alternativna je da oni koji su naslijedili bogatstvo imaju veću srednju vrijednost od drugih.
+
+Provodimo F-test usporedbe varijanci:
+
+```{r}
+var.test(inherited_billionaire$wealth.worth.in.billions, non_inherited_billionaire$wealth.worth.in.billions)
+```
+
+Niska p-vrijednost nam sugerira da odbacimo nultu hipotezu o jednakosti varijanci. Provedimo sada i t-test:
+
+```{r}
+t.test(inherited_billionaire$wealth.worth.in.billions, non_inherited_billionaire$wealth.worth.in.billions, alt = "greater", var.equal = TRUE)
+```
+
+Na razini značajnosti od 5%, zbog velike p-vrijednosti, ne možemo odbaciti nultu hipotezu te zaključujemo da milijarderi koji su nasljedili bogatstvno nisu statistički značajno bogatiji od onih koji nisu.
+
+# Možete li iz danih varijabli predvidjeti njihovo bogatstvo?
+
+Zanima nas možemo li iz danih varijabli predvidjeti bogatstvo milijardera.
+
+### Ovisnosti dobi milijardera i količine bogatstva
+
+Za ispitivanje ovisnosti količine bogatstva o dobi mlijardera koristit ćemo linearnu regresiju dob mlijardera. Pri tome će regresor biti dob, a zavisna varijable će biti iznos bogatstva u milijardama dolara.
+
+```{r}
+plot(billionaires$demographics.age,billionaires$wealth.worth.in.billions)
+```
+
+```{r}
+fit.age=lm(wealth.worth.in.billions~demographics.age, data=billionaires_adapt_age)
+
+plot(billionaires_adapt_age$demographics.age,billionaires_adapt_age$wealth.worth.in.billions,xlab="Iznos bogatstva u milijardama",ylab="Dob mlijardera", main="Distribucija bogatstva u ovisnosti o dobi milijardera")
+lines(billionaires_adapt_age$demographics.age,fitAge$fitted.values, col='red')
+```
+
+### Normalnost reziduala i homogenost varijance
+
+Normalnost reziduala moguće je provjeriti grafički, pomoću kvantil-kvantil plota (usporedbom s linijom normalne razdiobe), te statistički pomoću Kolmogorov-Smirnovljevog testa.
+
+```{r}
+lillie.test(rstandard(fit.age))
+```
+
+```{r}
+selected.model = fit.age
+
+plot(selected.model$residuals) 
+
+hist((selected.model$residuals))
+hist(rstandard(selected.model))
+
+qqnorm(rstandard(selected.model))
+qqline(rstandard(selected.model))
+
+plot(selected.model$fitted.values,selected.model$residuals) 
+
+ks.test(rstandard(fit.age),'pnorm')
+
+require(nortest)
+lillie.test(rstandard(fit.age))
+```
+
+S obzirom da je t-test robustan na normalnost, da je uzorak velik te da iz histograma vidimo da radioba varijable dob donekle nalikuje normalnoj razdiobi, možemo donjeti regresijski zaključak na temelju modela iako je p-vrijednost testa normalnosti jako mala. Nagibi pravaca linearne regresije potvrđuju sumnju na utjecaj dobi na bogatstvo.
+
+### Je li količina bogatstva ovisna o poziciji milijardera u kompaniji?
+
+```{r}
+positions = unique(unlist(apply(billionaires[c("company.relationship")], 1, function(x) strsplit(x, "\\|"))))
+positions
+```
+
+Promatrat ćemo samo pozicije founder, owner, relation i chairman jer su te najzastupljenije, dok je zastupljenost ostalih pozicija vrlo slaba.
+
+```{r}
+founder<-(billionaires[billionaires$company.relationship == 'founder',])
+founder_chairman<-(billionaires[billionaires$company.relationship == 'founder/chairman',])
+owner<-(billionaires[billionaires$company.relationship == 'owner',])
+```
+
+Zatim razdvojimo milijardere po najzastupljenijim pozicijama i proučimo razdiobu bogatstva.
+
+```{r}
+hist(founder$wealth.worth.in.billions,main='Iznos bogatstva u milijardama dolara',xlab='Bogatstvo',ylab='Frekvencija', breaks=20)
+
+hist(founder_chairman$wealth.worth.in.billions,main='Iznos bogatstva u milijardama dolara',xlab='Bogatstvo',ylab='Frekvencija', breaks=20)
+
+hist(owner$wealth.worth.in.billions,main='Iznos bogatstva u milijardama dolara',xlab='Bogatstvo',ylab='Frekvencija', breaks=20)
+```
+
+Pogledajmo boxplot bogatstva svake pozicije.
+
+```{r}
+boxplot(founder$wealth.worth.in.billions, 
+        founder_chairman$wealth.worth.in.billions,
+        owner$wealth.worth.in.billions,
+        names = c('Found', 'Chair', 'Owner'),
+        main='Boxplot of different positions')
+```
+
+Budući da je na 'nenaštimanom' boxplot grafu teško vidjeti kvartile pojedinih pozcija i pozicije founder i owner imaju puno outliera, aritmetičke sredine ovakvih podataka nisu dovoljno vjerodostojne i bolja mjera za sredinu u ovoj situaciji bila bi medijan. Budući da moramo provesti test o jednakosti srednjih vijednosti prikazanih pozicija, cilj je za svaku poziciju pretpostaviti normalnost razdiobe, zbog čega smo odlučili napisali funkciju za izbacivanje outliera i ograničili podatke pojedinih pozicija koji uzrokuju nestabilnost za mjere poput srednje vrijednosti i standardne devijacije.
+
+```{r}
+remove_outliers <- function(x, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE, ...)
+  H <- 1.5 * IQR(x, na.rm = TRUE)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  y
+}
+founder$wealth.worth.in.billions = remove_outliers(founder$wealth.worth.in.billions)
+
+founder_chairman$wealth.worth.in.billions = remove_outliers(founder_chairman$wealth.worth.in.billions)
+
+
+owner$wealth.worth.in.billions = remove_outliers(owner$wealth.worth.in.billions)
+
+
+boxplot(founder$wealth.worth.in.billions,
+        founder_chairman$wealth.worth.in.billions, 
+        owner$wealth.worth.in.billions, 
+        names = c('FOUND', 'CHAIR', 'OWN'),
+        main='Boxplot of different industries')
+```
+
+Usporedbom ove dvije verzije boxplotova možemo primjetiti nekoliko stvari. Iz drugog box plota bismo mogli uočiti da je medijan pozicije founder chairman veći nego ostalim dvjema pozicijama. Također uočavamo da je većina milijardera na poziciji founder ili founder chairman te iz prvog boxplota zaključujemo da iako je medijan bogatstva na poziciji founder malen u odnosu na ostale pozicije, najbogatiji milijarderi upravo imaju tu poziciju u kompaniji što je vidljivo iz brojnosti i udaljenosti outliera. Kako smo vizualizirali podatke i uvidjeli izričitu razliku u odnosu na pozicije, nema potrebe za daljnjom analizom te zaključujemo kako pozicija utječe na količinu bogatstva.
+
+### Je li količina bogatstva povezana s industrijom od koje profitiraju milijarderi?
+
+Promatrat ćemo pet najzastupljenijih industrija.
+
+```{r}
+industry<-unique(billionaires$wealth.how.industry)
+head(industry,15)
+consumer <- billionaires[which(billionaires$wealth.how.industry=='Consumer'), ]
+dim(consumer)
+retail_restaurant <- billionaires[which(billionaires$wealth.how.industry=='Retail, Restaurant'), ]
+dim(retail_restaurant)
+real_estate <- billionaires[which(billionaires$wealth.how.industry=='Real Estate'), ]
+dim(real_estate)
+money_mngmt <- billionaires[which(billionaires$wealth.how.industry=='Money Management'), ]
+dim(money_mngmt)
+media <- billionaires[which(billionaires$wealth.how.industry=='Media'), ]
+dim(media)
+```
+
+### Je li količina bogatstva povezana s geografskom regijom u kojoj žive milijarderi?
+
+Prvo pogledajmo koje regije promatramo i stvorimo set podataka iz kojeg smo izbacili one mlijardere kojima nije upisana geografska regija.
+
+```{r}
+
+billionaires_reg=billionaires[!(billionaires$location.region==0),]
+region<-unique(billionaires_reg$location.region)
+region
+n_am<- billionaires[which(billionaires$location.region=='North America'), ]
+dim(n_am)
+lat_am<- billionaires[which(billionaires$location.region=='Latin America'), ]
+dim(lat_am)
+eur<- billionaires[which(billionaires$location.region=='Europe'), ]
+dim(eur)
+e_asia<- billionaires[which(billionaires$location.region=='East Asia'), ]
+dim(e_asia)
+me_na<- billionaires[which(billionaires$location.region=='Middle East/North Africa'), ]
+dim(me_na)
+ss_afr<- billionaires[which(billionaires$location.region=='Sub-Saharan Africa'), ]
+dim(ss_afr)
+s_asia<- billionaires[which(billionaires$location.region=='South Asia'), ]
+dim(s_asia)
+```
+
+# Kada biste birali karijeru isključivo prema kriteriju da se obogatite, koju biste industriju izabrali?
+
+Pretpostavit ćemo da je atribut bogatstva pojedinih milijardera ovisan o atributu industrije kojom se isti bave. Iz podataka ćemo izbrisati nedefinirane vrijednosti, atribute koji postižu vrijednost "other" i 0. Također smo odlučili u obzir uzeti samo podatke koji su uneseni u tablicu 2010. godine i poslije jer smatramo da su ti podaci relevantniji za sadašnjost i za budućnost. Izbacili smo industriju bankarstvo jer je zastarjela.
+
+### Sređivanje podataka
+
+```{r}
+billionaires = billionaires[billionaires$year > 2010, ]
+billionaires = billionaires[!is.na(billionaires$wealth.how.industry),]
+billionaires = billionaires[!(billionaires$wealth.how.industry == '0'),]
+billionaires = billionaires[!(billionaires$wealth.how.industry == "Other"),]
+```
+
+```{r}
+industries = unique(unlist(apply(billionaires[c("wealth.how.industry")], 1, function(x) strsplit(x, "\\|"))))
+industries
+```
+
+Podijelili smo podatke prema industrijama.
+
+```{r}
+Technology_Computer = billionaires[billionaires$wealth.how.industry == "Technology-Computer",]
+numOfTechnology_Computer = nrow(Technology_Computer)
+
+Consumer = billionaires[billionaires$wealth.how.industry == "Consumer",]
+numOfConsumer = nrow(Consumer)
+
+Media = billionaires[billionaires$wealth.how.industry == "Media",]
+numOfMedia = nrow(Media)
+
+Technology_Medical = billionaires[billionaires$wealth.how.industry == "Technology-Medical",]
+numOfTechnology_Medical = nrow(Technology_Medical)
+
+Retail_Restaurant = billionaires[billionaires$wealth.how.industry == "Retail, Restaurant",]
+numOfRetail_Restaurant = nrow(Retail_Restaurant)
+
+Real_Estate = billionaires[billionaires$wealth.how.industry == "Real Estate",]
+numOfReal_Estate = nrow(Real_Estate)
+
+Hedge_funds = billionaires[billionaires$wealth.how.industry == "Hedge funds",]
+numOfHedge_funds = nrow(Hedge_funds)
+
+Diversified_financial = billionaires[billionaires$wealth.how.industry == "Diversified financial",]
+numOfDiversified_financial = nrow(Diversified_financial)
+
+Money_Management = billionaires[billionaires$wealth.how.industry == "Money Management",]
+numOfMoney_Management = nrow(Money_Management)
+
+Energy = billionaires[billionaires$wealth.how.industry == "Energy",]
+numOfEnergy = nrow(Energy)
+
+Mining_metals = billionaires[billionaires$wealth.how.industry == "Mining and metals",]
+numOfMining_metals = nrow(Mining_metals)
+
+Non_Consumer = billionaires[billionaires$wealth.how.industry == "Non-consumer industrial",]
+numOfNon_Consumer = nrow(Non_Consumer)
+
+Constrution = billionaires[billionaires$wealth.how.industry == "Constrution",]
+numOfConstrution = nrow(Constrution)
+
+Private_equity_leveraged_buyout = billionaires[billionaires$wealth.how.industry == "Private equity/leveraged buyout",]
+numOfPrivate_equity_leveraged_buyout = nrow(Private_equity_leveraged_buyout)
+
+Venture_Capital = billionaires[billionaires$wealth.how.industry == "Venture Capital",]
+numOfVenture_Capital = nrow(Venture_Capital)
+
+```
+
+### Testiranje podataka
+
+Pogledajmo prosjeke bogatstva pojedinih industrija.
+
+```{r}
+cat('Prosjek bogatstva Technology Computer : ', mean(Technology_Computer$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Consumer : ', mean(Consumer$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Media : ', mean(Media$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Technology Medical : ', mean(Technology_Medical$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Retail Restaurant: ', mean(Retail_Restaurant$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Real Estate : ', mean(Real_Estate$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Hedge funds : ', mean(Hedge_funds$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Diversified financial: ', mean(Diversified_financial$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Money Management: ', mean(Money_Management$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Energy: ', mean(Energy$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Mining metals: ', mean(Mining_metals$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Non Consumer: ', mean(Non_Consumer$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Constrution: ', mean(Constrution$wealth.worth.in.billions),'\n')
+
+cat('Prosjek bogatstva Private equity/leveragedbuyout: ', mean(Private_equity_leveraged_buyout$wealth.worth.in.billions), '\n')
+
+cat('Prosjek bogatstva Venture Capital: ', mean(Venture_Capital$wealth.worth.in.billions),'\n')
+
+```
+
+Prosjeci nam daju naslutiti da bi Technology Computer industrija mogla biti najbolja no nismo sigurni vrijedi li to za budućnost zbog čega ćemo probati napraviti predviđanje. Odlučili smo prvo provesti Lillieforceovu inačicu KS testa da ispitamo normalnost podataka.
+
+```{r}
+require(nortest)
+lillie.test(billionaires$wealth.worth.in.billions)
+
+lillie.test(Technology_Computer$wealth.worth.in.billions)
+lillie.test(Consumer$wealth.worth.in.billions)
+lillie.test(Media$wealth.worth.in.billions)
+lillie.test(Technology_Medical$wealth.worth.in.billions)
+lillie.test(Retail_Restaurant$wealth.worth.in.billions)
+lillie.test(Real_Estate$wealth.worth.in.billions)
+lillie.test(Hedge_funds$wealth.worth.in.billions)
+lillie.test(Diversified_financial$wealth.worth.in.billions)
+lillie.test(Money_Management$wealth.worth.in.billions)
+lillie.test(Energy$wealth.worth.in.billions)
+lillie.test(Mining_metals$wealth.worth.in.billions)
+lillie.test(Non_Consumer$wealth.worth.in.billions)
+lillie.test(Constrution$wealth.worth.in.billions)
+lillie.test(Private_equity_leveraged_buyout$wealth.worth.in.billions)
+lillie.test(Venture_Capital$wealth.worth.in.billions)
+```
+
+Budući da uzorci pri ovom testiranju imaju vrlo malo p-vrijednost, sumnjamo u normalnost razdiobe tih populacija. Odlučili smo provesti Bartlettov test za testirane homogenosti varijanca.
+
+```{r}
+
+Technology_Computer$industries = 'Technology-Computer'
+Consumer$industries = 'Consumer'
+Media$industries = 'Media'
+Technology_Medical$industries = 'Technology-Medica'
+Retail_Restaurant$industries = 'Retail, Restaurant'
+Real_Estate$industries = 'Real Estate'
+Hedge_funds$industries = 'Hedge funds'
+Diversified_financial$industries = 'Diversified financial'
+Money_Management$industries = 'Money Management'
+Energy$industries = 'Energy'
+Mining_metals$industries = 'Mining and metals'
+Non_Consumer$industries = 'Non-consumer industrial'
+Constrution$industries = 'Constrution'
+Private_equity_leveraged_buyout$industries = 'Private equity/leveraged buyout'
+Venture_Capital$industries = 'Venture Capital'
+
+anovaDS2 = Technology_Computer
+anovaDS2 = rbind(Consumer, anovaDS2)
+anovaDS2 = rbind(Media, anovaDS2)
+anovaDS2 = rbind(Technology_Medical, anovaDS2)
+anovaDS2 = rbind(Retail_Restaurant, anovaDS2)
+anovaDS2 = rbind(Real_Estate, anovaDS2)
+anovaDS2 = rbind(Hedge_funds, anovaDS2)
+anovaDS2 = rbind(Diversified_financial, anovaDS2)
+anovaDS2 = rbind(Money_Management, anovaDS2)
+anovaDS2 = rbind(Energy, anovaDS2)
+anovaDS2 = rbind(Mining_metals, anovaDS2)
+anovaDS2 = rbind(Non_Consumer, anovaDS2)
+anovaDS2 = rbind(Constrution, anovaDS2)
+anovaDS2 = rbind(Private_equity_leveraged_buyout, anovaDS2)
+anovaDS2 = rbind(Venture_Capital, anovaDS2)
+
+
+```
+
+```{r}
+bartlett.test(anovaDS2$wealth.worth.in.billions ~ anovaDS2$industries)
+```
+
+Dobili smo vrlo malu p-vrijednost, što je jasan pokazatelj da distribucije nisu normalne i ne možemo provesti ANOVU. Pogledajmo vrijednosti tih varijanci:
+
+```{r}
+var(Technology_Computer$wealth.worth.in.billions)
+var(Consumer$wealth.worth.in.billions)
+var(Media$wealth.worth.in.billions)
+var(Technology_Medical$wealth.worth.in.billions)
+var(Retail_Restaurant$wealth.worth.in.billions)
+var(Real_Estate$wealth.worth.in.billions)
+var(Hedge_funds$wealth.worth.in.billions)
+var(Diversified_financial$wealth.worth.in.billions)
+var(Money_Management$wealth.worth.in.billions)
+var(Energy$wealth.worth.in.billions)
+var(Mining_metals$wealth.worth.in.billions)
+var(Non_Consumer$wealth.worth.in.billions)
+var(Constrution$wealth.worth.in.billions)
+var(Private_equity_leveraged_buyout$wealth.worth.in.billions)
+var(Venture_Capital$wealth.worth.in.billions)
+```
+
+```{r}
+boxplot(anovaDS2$wealth.worth.in.billions ~ anovaDS2$industries)
+```
+
+```{r}
+a2 = aov(anovaDS2$wealth.worth.in.billions ~ anovaDS2$industries)
+summary(a2)
+```
+
+Budući da ANOVA nije vjerodostojan kandidat za naše testiranje, odlučili smo provesti Kruskalov test.
+
+```{r}
+kruskal.test(anovaDS2$wealth.worth.in.billions ~ anovaDS2$industries)
+```
+
+Iz rezultata testa možemo zaključiti da se srednje vrijednosti statistički značajno međusobno razlikuju, tako da možemo pretpostaviti da je rad u pojedinoj industriji "isplativiji" i da bismo odabrali upravo tu industriju s ciljem obogaćenja. Ako ćemo uzeti u obzir srednje vrijednosti bogatstva pojedinih industrija, glavni kandidat za "najisplativiju" je definitivno računalna tehnologija i mediji.
